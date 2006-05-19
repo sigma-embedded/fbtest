@@ -90,14 +90,8 @@ setPixelPalette(void *buf_v, uint32_t val, int bpp)
 }
 
 static inline void *
-setPixelRGB(void *buf_v, struct fb_var_screeninfo const *info, uint8_t r, uint8_t g, uint8_t b)
+setPixelRGBRaw(void *buf_v, struct fb_var_screeninfo const *info, uint32_t val)
 {
-#define S(VAR,FIELD)	(((VAR)==0 ? 0 :				\
-			  (VAR)<=info->FIELD.length ? (1<<((VAR)-1)) : ((1<<(info->FIELD.length+1)) - 1)) << (info->FIELD.offset))
-
-  uint32_t	val = S(r, red) | S(g, green) | S(b, blue);
-#undef S
-
 #define SET(TYPE)		\
   case sizeof(TYPE)*8 : {	\
     TYPE	*buf = buf_v;	\
@@ -119,7 +113,22 @@ setPixelRGB(void *buf_v, struct fb_var_screeninfo const *info, uint8_t r, uint8_
     default		:
       assert(0);
   }
+#undef SET
 }
+
+    
+static inline void *
+setPixelRGB(void *buf_v, struct fb_var_screeninfo const *info, uint8_t r, uint8_t g, uint8_t b)
+{
+#define S(VAR,FIELD)	(((VAR)==0 ? 0 :				\
+			  (VAR)<=info->FIELD.length ? (1<<((VAR)-1)) : ((1<<(info->FIELD.length+1)) - 1)) << (info->FIELD.offset))
+
+  uint32_t	val = S(r, red) | S(g, green) | S(b, blue);
+#undef S
+
+  return setPixelRGBRaw(buf_v, info, val);
+}
+
 
 static inline uint32_t
 getPixelRGB(void const *buf_v_start, struct fb_var_screeninfo const *info, int x, int y)
@@ -326,7 +335,18 @@ int main (int argc, char *argv[])
 	else if (argv[1][0]=='p') val = 211;
 	else                      val = atoi(argv[1])+100;
 
-	memset(buf, val, 640*480);
+	memset(buf, val, var_info.xres*var_info.yres);
+	break;
+      }
+
+      case 16	:
+      case 32	: {
+	size_t		i   = var_info.xres*var_info.yres;
+	uint32_t	val = strtol(argv[1], 0, 0);
+
+	while (i-->0)
+	  buf = setPixelRGBRaw(buf, &var_info, val);
+	break;
       }
     }
   }
