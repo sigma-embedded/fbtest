@@ -1,3 +1,5 @@
+#define _GNU_SOURCE
+
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <unistd.h>
@@ -12,6 +14,17 @@
 
 #include <getopt.h>
 
+#ifdef __dietlibc__
+#  define dprintf	fdprintf
+#endif
+
+#define CMD_HELP	0x1000
+#define CMD_VERSION	0x1001
+#define CMD_FB		0x1002
+#define CMD_SOLID	0x1003
+#define CMD_GRAB	0x1004
+#define CMD_BARS	0x1005
+
 struct option const
 CMDLINE_OPTIONS[] = {
 	{ "help",       no_argument,       0, CMD_HELP },
@@ -22,6 +35,20 @@ CMDLINE_OPTIONS[] = {
 	{ "bars",	no_argument,       0, CMD_BARS },
 	{ 0,0,0,0 }
 };
+
+
+static void show_help()
+{
+	printf("Usage: fbtest [--fb <dev>] [--solid <color>] [--grab <fname>] [--bars]\n");
+	exit(0);
+}
+
+static void show_version()
+{
+	printf("fbtest 0.1 -- framebuffer test utility\n");
+	exit(1);
+}
+
 
 static void initPalette(int fd, char const *pin_str, struct fb_var_screeninfo const *info)
 {
@@ -135,7 +162,7 @@ static inline void *
 setPixelRGB(void *buf_v, struct fb_var_screeninfo const *info, uint8_t r, uint8_t g, uint8_t b)
 {
 #define S(VAR,FIELD)	(((VAR)==0 ? 0 :				\
-			  (VAR)<=info->FIELD.length ? (1<<((VAR)-1)) : ((1<<(info->FIELD.length+1)) - 1)) << (info->FIELD.offset))
+			  (VAR)<=info->FIELD.length ? (1<<((VAR)-1)) : ((1<<(info->FIELD.length)) - 1)) << (info->FIELD.offset))
 
 	uint32_t	val = S(r, red) | S(g, green) | S(b, blue);
 #undef S
@@ -305,17 +332,233 @@ displayRGB(struct fb_var_screeninfo const *info, void *buf_v)
 	}
 }
 
+static void write_all(int fd, void const *buf, size_t len)
+{
+	char const	*ptr  = buf;
+	while (len>0) {
+		ssize_t	l = write(fd, ptr, len);
+		if (l==0)
+			abort();
+		else if (l>0) {
+			ptr += l;
+			len -= l;
+		} else {
+			perror("write()");
+			abort();
+		}
+	}
+}
+
+struct fbinfo {
+	struct fb_var_screeninfo	var;
+	int				fd;
+	void				*buf;
+	size_t				buf_size;
+};
+
+struct window {
+	unsigned int			left;
+	unsigned int			right;
+	unsigned int			top;
+	unsigned int			bottom;
+};
+
+static int fb_init(char const *fbdev, struct fbinfo *info)
+{
+	memset(info, 0, sizeof *info);
+	
+	info->fd = open(fbdev, O_RDWR);
+	if (info->fd<0) {
+		perror("open(<fbdev>)");
+		return -1;
+	}
+
+	if (ioctl(info->fd, FBIOGET_VSCREENINFO, &info->var)<0) {
+		perror("ioctl(FBIOGET_VSCREENINFO)");
+		goto err;
+		return -1;
+	}
+
+	{
+		int const	line_size   = (info->var.xres *
+					       info->var.bits_per_pixel) / 8;
+
+		info->buf_size = line_size * info->var.yres;
+		info->buf      = mmap(0, info->buf_size,
+				      PROT_READ | PROT_WRITE, MAP_SHARED,
+				      info->fd, 0);
+
+		if (!info->buf) {
+			perror("mmap()");
+			goto err;
+		}
+	}
+
+	return 0;
+
+err:
+	if (info->buf)
+		munmap(info->buf, info->buf_size);
+	close(info->fd);
+	return -1;
+}
+
+static void fb_free(struct fbinfo *info)
+{
+	munmap(info->buf, info->buf_size);
+	close(info->fd);
+}
+
+static unsigned char normalize_rgb(uint32_t v, struct fb_bitfield const *col)
+{
+	if (col->msb_right)
+		abort();		/* not implemented */
+
+	if (col->length>8)
+		abort();
+
+	v >>= col->offset;
+	v  &= ((1<<col->length)-1);
+	v <<= 8-col->length;
+
+	return v;
+}
+
+static int grab_fb(char const *fbdev, char const *fname)
+{
+	struct fbinfo		fb;
+	int			out_fd;
+	int			rc = -1;
+	unsigned int		x, y;
+	uint8_t			*res_buf;
+	uint8_t			*res_ptr;
+
+	if (strcmp(fname, "-")==0)
+		out_fd = dup(1);
+	else
+		out_fd = open(fname, O_CREAT|O_WRONLY, 0022);
+
+	if (out_fd<0) {
+		fprintf(stderr, "Can not open output file: %m\n");
+		return -1;
+	}
+	
+	if (fb_init(fbdev, &fb)<0)
+		goto err;
+
+	fprintf(stderr, "Grabbing from a fb-display with %ux%u (%ibpp)\n",
+		fb.var.xres, fb.var.yres, fb.var.bits_per_pixel);
+
+
+	switch (fb.var.bits_per_pixel) {
+	case 8	:
+		fprintf(stderr, "grabbing from palette not implemented yet\n");
+		break;
+
+	default:
+		res_buf = alloca(fb.var.yres * fb.var.xres * 3);
+		res_ptr = res_buf;
+
+		dprintf(out_fd, "P6\n%u %u\n255\n", fb.var.xres, fb.var.yres);
+
+		for (y=0; y<fb.var.yres; ++y) {
+			for (x=0; x<fb.var.xres; ++x) {
+				uint32_t	v = getPixelRGB(fb.buf, &fb.var,
+								x, y);
+
+				*res_ptr++ = normalize_rgb(v, &fb.var.red);
+				*res_ptr++ = normalize_rgb(v, &fb.var.green);
+				*res_ptr++ = normalize_rgb(v, &fb.var.blue);
+			}
+		}
+
+		write_all(out_fd, res_buf, res_ptr - res_buf);
+		break;
+	}
+
+	rc = 0;
+	
+	fb_free(&fb);
+err:
+	close(out_fd);
+	return rc;
+}
+
+static int solid_fb(char const *fbdev, char const *opt)
+{
+	struct fbinfo		fb;
+
+	if (fb_init(fbdev, &fb)<0)
+		return -1;
+	
+	switch (fb.var.bits_per_pixel) {
+	case 8	: {
+		uint8_t	val;
+
+		initPalette(fb.fd, opt, &fb.var);
+		
+		if      (opt[0]=='#') val = atoi(opt+1);
+		else if (opt[0]=='g') val = atoi(opt+1)+200;
+		else if (opt[0]=='p') val = 211;
+		else                  val = atoi(opt)+100;
+
+		fprintf(stderr, "Filling fb-display with %ux%u (%ibpp) with solid color of %d[%s]\n",
+			fb.var.xres, fb.var.yres, fb.var.bits_per_pixel, val, opt);
+		
+		memset(fb.buf, val, fb.var.xres*fb.var.yres);
+		break;
+	}
+
+	case 16	:
+	case 24:
+	case 32	: {
+		size_t		i   = fb.var.xres*fb.var.yres;
+		uint32_t	val = strtol(opt, 0, 0);
+		void		*buf = fb.buf;
+
+		fprintf(stderr, "Filling fb-display with %ux%u (%ibpp) with solid color of %08x\n",
+			fb.var.xres, fb.var.yres, fb.var.bits_per_pixel, val);
+		
+		while (i-->0)
+			buf = setPixelRGBRaw(buf, &fb.var, val);
+		break;
+	}
+	}
+
+	fb_free(&fb);
+	return 0;
+}
+
+static int bars_fb(char const *fbdev)
+{
+	struct fbinfo		fb;
+
+	if (fb_init(fbdev, &fb)<0)
+		return -1;
+
+	fprintf(stderr, "Assuming a fb-display with %ux%u (%ibpp)\n",
+		fb.var.xres, fb.var.yres, fb.var.bits_per_pixel);
+	
+	switch (fb.var.bits_per_pixel) {
+	case 8	:
+		initPalette(fb.fd, NULL, &fb.var);
+		displayPalette(&fb.var, fb.buf);
+		break;
+	default	:	displayRGB(&fb.var, fb.buf);     break;
+	}
+
+	fb_free(&fb);
+	return 0;
+}
+
 int main (int argc, char *argv[])
 {
 	struct {
 		char const	*fb;
 	}	options = {
-		.fb = "/dev/fb0";
+		.fb = "/dev/fb0",
 	};
-
-	int				fd;
-	uint8_t				*buf;
-	struct fb_var_screeninfo	var_info;
+	int			done = 0;
 
 	while (1) {
 		int		c = getopt_long(argc, argv, "",
@@ -323,69 +566,20 @@ int main (int argc, char *argv[])
 		if (c==-1) break;
 
 		switch (c) {
-		case CMD_HELP	:  show_help();
+		case CMD_HELP		:  show_help();
 		case CMD_VERSION	:  show_version();
-		case CMD_FB		:
+		case CMD_FB		:  options.fb = optarg; break;
+		case CMD_GRAB		:  done = 1; grab_fb(options.fb, optarg); break;
+		case CMD_SOLID		:  done = 1; solid_fb(options.fb, optarg); break;
+		case CMD_BARS		:  done = 1; bars_fb(options.fb); break;
 		default:
 			fprintf(stderr, "invalid option; try '--help' for more information\n");
 			return EXIT_FAILURE;
 		}
 	}
 
-
-	fd  = open ("/dev/fb0", O_RDWR);
-
-	ioctl(fd, FBIOGET_VSCREENINFO, &var_info);
-
-	int const		line_size = var_info.xres * var_info.bits_per_pixel / 8;
-	int const		buffer_size = line_size * var_info.yres;
-
-	printf("Assuming fb-display with %ux%u (%ibpp)\n",
-	       var_info.xres, var_info.yres, var_info.bits_per_pixel);
-
-	buf = mmap (0, buffer_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-
-	switch (var_info.bits_per_pixel) {
-	case 8	:
-		initPalette(fd, argc>1 ? argv[1] : 0, &var_info);
-		break;
-	}
-
-	if (argc==1) {
-		switch (var_info.bits_per_pixel) {
-		case 8	:
-			displayPalette(&var_info, buf);
-			break;
-		default	:
-			displayRGB(&var_info, buf);
-			break;
-		}
-	}
-	else {
-		switch (var_info.bits_per_pixel) {
-		case 8	: {
-			uint8_t	val;
-
-			if      (argv[1][0]=='#') val = atoi(argv[1]+1);
-			else if (argv[1][0]=='g') val = atoi(argv[1]+1)+200;
-			else if (argv[1][0]=='p') val = 211;
-			else                      val = atoi(argv[1])+100;
-
-			memset(buf, val, var_info.xres*var_info.yres);
-			break;
-		}
-
-		case 16	:
-		case 32	: {
-			size_t		i   = var_info.xres*var_info.yres;
-			uint32_t	val = strtol(argv[1], 0, 0);
-
-			while (i-->0)
-				buf = setPixelRGBRaw(buf, &var_info, val);
-			break;
-		}
-		}
-	}
+	if (!done)
+		bars_fb(options.fb);
 }
 
 // Local Variables:
