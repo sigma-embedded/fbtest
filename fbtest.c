@@ -1,4 +1,3 @@
-#include <linux/fb.h>
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <unistd.h>
@@ -9,6 +8,20 @@
 #include <assert.h>
 #include <sys/param.h>
 #include <sys/ioctl.h>
+#include <linux/fb.h>
+
+#include <getopt.h>
+
+struct option const
+CMDLINE_OPTIONS[] = {
+	{ "help",       no_argument,       0, CMD_HELP },
+	{ "version",    no_argument,       0, CMD_VERSION },
+	{ "fb",         required_argument, 0, CMD_FB },
+	{ "solid",	required_argument, 0, CMD_SOLID },
+	{ "grab",	required_argument, 0, CMD_GRAB },
+	{ "bars",	no_argument,       0, CMD_BARS },
+	{ 0,0,0,0 }
+};
 
 static void initPalette(int fd, char const *pin_str, struct fb_var_screeninfo const *info)
 {
@@ -18,8 +31,8 @@ static void initPalette(int fd, char const *pin_str, struct fb_var_screeninfo co
 			  info->red.length + info->green.length + info->blue.length+3 };
 
   int const	min_len = MIN(MIN(info->red.length, info->green.length),
-			      info->blue.length)+1;  
-  
+			      info->blue.length)+1;
+
   uint16_t	red[pos[3]];
   uint16_t	green[pos[3]];
   uint16_t	blue[pos[3]];
@@ -55,22 +68,22 @@ static void initPalette(int fd, char const *pin_str, struct fb_var_screeninfo co
     red[i] = green[i] = blue[i] = (1 << (i+(16-min_len)));
 
   red[min_len-1] = green[min_len-1] = blue[min_len-1] = 0xffff;
-  
+
   cmap.start = 200;
   cmap.len   = min_len;
-    
+
   ioctl(fd, FBIOPUTCMAP, &cmap);
 
-    
+
   red  [0] = green[0] = blue[0] = 0xffff;
   red  [1] = green[1] = blue[1] = 0x0000;
   red  [2] = pin_str ? (pin_val & 0xfc0000) >> 8 : 0;
   green[2] = pin_str ? (pin_val & 0x00fc00)      : 0;
   blue [2] = pin_str ? (pin_val & 0x0000fc) << 8 : 0;
-    
+
   cmap.start = 210;
   cmap.len   = 3;
-    
+
   ioctl(fd, FBIOPUTCMAP, &cmap);
 }
 
@@ -87,7 +100,7 @@ setPixelPalette(void *buf_v, uint32_t val, int bpp)
     default	:
       fprintf(stderr, "Palette mode not supported with %ibpp\n", bpp);
       exit(1);
-  }   
+  }
 }
 
 static inline void *
@@ -117,7 +130,7 @@ setPixelRGBRaw(void *buf_v, struct fb_var_screeninfo const *info, uint32_t val)
 #undef SET
 }
 
-    
+
 static inline void *
 setPixelRGB(void *buf_v, struct fb_var_screeninfo const *info, uint8_t r, uint8_t g, uint8_t b)
 {
@@ -142,7 +155,7 @@ getPixelRGB(void const *buf_v_start, struct fb_var_screeninfo const *info, int x
     TYPE const	*buf = buf_v;	\
     return *buf;		\
   }
-  
+
   switch (info->bits_per_pixel) {
     GET(uint8_t);
     GET(uint16_t);
@@ -176,11 +189,11 @@ displayPalette(struct fb_var_screeninfo const *info, void *buf_v)
 
     for (x=0; x<xres; ++x)
       ptr = setPixelPalette(ptr, x<xres/2 ? lcol : rcol, bpp);
-  }  
+  }
 
 #define P(X,Y,COL)	\
   setPixelPalette((char *)(buf_v) + (((Y)*xres) + (X)) * bpp/8, (COL), bpp)
-  
+
   for (i=0; i<5; ++i) {
     uint8_t	col = (i%2) ? 211 : 210;
 
@@ -202,7 +215,7 @@ displayPalette(struct fb_var_screeninfo const *info, void *buf_v)
   setPixelPalette((char *)(buf_v) +      2 * bpp/8, 210, bpp);
   setPixelPalette((char *)(buf_v) + xres   * bpp/8, 210, bpp);
   setPixelPalette((char *)(buf_v) + 2*xres * bpp/8, 210, bpp);
-  
+
   setPixelPalette((char *)(buf_v) + (xres*yres-1)     * bpp/8, 211, bpp);
   setPixelPalette((char *)(buf_v) + (xres*yres-2)     * bpp/8, 211, bpp);
   setPixelPalette((char *)(buf_v) + (xres*yres-3)     * bpp/8, 211, bpp);
@@ -226,10 +239,10 @@ displayRGB(struct fb_var_screeninfo const *info, void *buf_v)
   int const	min_len = MIN(MIN(info->red.length, info->green.length),
 			      info->blue.length)+1;
   int		old_pos = -1;
-  
+
   for (y=0; y<yres; ++y) {
     int		cur_pos	= (y*pos[3])/yres;
-    
+
     uint8_t	r = (pos[0]<=cur_pos && cur_pos<pos[1]) ? cur_pos-pos[0]+1 : 0;
     uint8_t	g = (pos[1]<=cur_pos && cur_pos<pos[2]) ? cur_pos-pos[1]+1 : 0;
     uint8_t	b = (pos[2]<=cur_pos && cur_pos<pos[3]) ? cur_pos-pos[2]+1 : 0;
@@ -266,7 +279,7 @@ displayRGB(struct fb_var_screeninfo const *info, void *buf_v)
       else          ptr = setPixelRGB(ptr, info,
 				      grey + info->red.length   - min_len,
 				      grey + info->green.length - min_len,
-				      grey + info->blue.length  - min_len);    
+				      grey + info->blue.length  - min_len);
     }
 
     if (y==0 || y+1==yres) {
@@ -279,8 +292,8 @@ displayRGB(struct fb_var_screeninfo const *info, void *buf_v)
     else if (y<5 || y+5>=yres) {
       int	col = ((y<yres/2 && y%2) || (y>yres/2 && (yres-y-1)%2)) ? 0 : 255;
       ptr    = setPixelRGB(ptr, info,  col, col, col);
-    }    
-      
+    }
+
     if (old_pos!=cur_pos) {
       printf("displayRGB -> ptr=%p, r=%u, g=%u, b=%u, grey=%u, pos=[%u,%u,%u,%u]/%u, *addr=[%08x,%08x]\n",
 	     ptr, r,  g,  b, grey,
@@ -294,9 +307,31 @@ displayRGB(struct fb_var_screeninfo const *info, void *buf_v)
 
 int main (int argc, char *argv[])
 {
+	struct {
+		char const	*fb;
+	}	options = {
+		.fb = "/dev/fb0";
+	};
+	
   int				fd;
   uint8_t			*buf;
   struct fb_var_screeninfo	var_info;
+
+  while (1) {
+    int		c = getopt_long(argc, argv, "",
+				CMDLINE_OPTIONS, 0);
+    if (c==-1) break;
+
+    switch (c) {
+    case CMD_HELP	:  show_help();
+    case CMD_VERSION	:  show_version();
+    case CMD_FB		:  
+    default:
+	    fprintf(stderr, "invalid option; try '--help' for more information\n");
+	    return EXIT_FAILURE;
+    }
+  }
+
 
   fd  = open ("/dev/fb0", O_RDWR);
 
@@ -307,7 +342,7 @@ int main (int argc, char *argv[])
 
   printf("Assuming fb-display with %ux%u (%ibpp)\n",
 	 var_info.xres, var_info.yres, var_info.bits_per_pixel);
-  
+
   buf = mmap (0, buffer_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 
   switch (var_info.bits_per_pixel) {
