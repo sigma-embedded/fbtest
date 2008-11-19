@@ -25,6 +25,8 @@
 #define CMD_GRAB	0x1004
 #define CMD_BARS	0x1005
 
+#define CROSS_SZ	20
+
 struct option const
 CMDLINE_OPTIONS[] = {
 	{ "help",       no_argument,       0, CMD_HELP },
@@ -251,6 +253,24 @@ displayPalette(struct fb_var_screeninfo const *info, void *buf_v)
 #endif
 }
 
+static void *
+draw_cross_rgb(void *ptr, struct fb_var_screeninfo const *info, int x, int y)
+{
+	int		is_black = 1;
+	uint8_t		col;
+
+	if (x == y || x == -y ||
+	    x == -CROSS_SZ+5 || x+1 == CROSS_SZ-5 ||
+	    y == -CROSS_SZ+5 || y+1 == CROSS_SZ-5)
+		is_black = !is_black;
+
+	if (y < 0)
+		is_black = !is_black;
+
+	col = is_black ? 0 : 255;
+	return setPixelRGB(ptr, info,   col,  col, col);
+}
+
 static void
 displayRGB(struct fb_var_screeninfo const *info, void *buf_v)
 {
@@ -301,7 +321,10 @@ displayRGB(struct fb_var_screeninfo const *info, void *buf_v)
 			x      = 0;
 
 		for (; x<max_x; ++x) {
-			if (x<xres/2) ptr = setPixelRGB(ptr, info, r, g, b);
+			if (y >= yres/2 - CROSS_SZ && y < yres/2 + CROSS_SZ &&
+			    x >= xres/2 - CROSS_SZ && x < xres/2 + CROSS_SZ)
+				ptr = draw_cross_rgb(ptr, info, xres/2 - x, yres/2 - y);
+			else if (x<xres/2) ptr = setPixelRGB(ptr, info, r, g, b);
 			else if (grey>min_len) ptr = setPixelRGB(ptr, info, 255, 255, 255);
 			else          ptr = setPixelRGB(ptr, info,
 							grey + info->red.length   - min_len,
