@@ -389,7 +389,7 @@ struct window {
 static int fb_init(char const *fbdev, struct fbinfo *info)
 {
 	memset(info, 0, sizeof *info);
-	
+
 	info->fd = open(fbdev, O_RDWR);
 	if (info->fd<0) {
 		perror("open(<fbdev>)");
@@ -465,7 +465,7 @@ static int grab_fb(char const *fbdev, char const *fname)
 		fprintf(stderr, "Can not open output file: %m\n");
 		return -1;
 	}
-	
+
 	if (fb_init(fbdev, &fb)<0)
 		goto err;
 
@@ -500,7 +500,7 @@ static int grab_fb(char const *fbdev, char const *fname)
 	}
 
 	rc = 0;
-	
+
 	fb_free(&fb);
 err:
 	close(out_fd);
@@ -513,13 +513,13 @@ static int solid_fb(char const *fbdev, char const *opt)
 
 	if (fb_init(fbdev, &fb)<0)
 		return -1;
-	
+
 	switch (fb.var.bits_per_pixel) {
 	case 8	: {
 		uint8_t	val;
 
 		initPalette(fb.fd, opt, &fb.var);
-		
+
 		if      (opt[0]=='#') val = atoi(opt+1);
 		else if (opt[0]=='g') val = atoi(opt+1)+200;
 		else if (opt[0]=='p') val = 211;
@@ -527,7 +527,7 @@ static int solid_fb(char const *fbdev, char const *opt)
 
 		fprintf(stderr, "Filling fb-display with %ux%u (%ibpp) with solid color of %d[%s]\n",
 			fb.var.xres, fb.var.yres, fb.var.bits_per_pixel, val, opt);
-		
+
 		memset(fb.buf, val, fb.var.xres*fb.var.yres);
 		break;
 	}
@@ -541,7 +541,7 @@ static int solid_fb(char const *fbdev, char const *opt)
 
 		fprintf(stderr, "Filling fb-display with %ux%u (%ibpp) with solid color of %08x\n",
 			fb.var.xres, fb.var.yres, fb.var.bits_per_pixel, val);
-		
+
 		while (i-->0)
 			buf = setPixelRGBRaw(buf, &fb.var, val);
 		break;
@@ -561,7 +561,7 @@ static int bars_fb(char const *fbdev)
 
 	fprintf(stderr, "Assuming a fb-display with %ux%u (%ibpp)\n",
 		fb.var.xres, fb.var.yres, fb.var.bits_per_pixel);
-	
+
 	switch (fb.var.bits_per_pixel) {
 	case 8	:
 		initPalette(fb.fd, NULL, &fb.var);
