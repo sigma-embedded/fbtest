@@ -25,7 +25,7 @@
 #define CMD_GRAB	0x1004
 #define CMD_BARS	0x1005
 
-#define CROSS_SZ	20
+#define CROSS_SZ	50
 
 struct option const
 CMDLINE_OPTIONS[] = {
