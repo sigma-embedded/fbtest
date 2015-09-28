@@ -176,7 +176,7 @@ setPixelRGB(void *buf_v, struct fb_var_screeninfo const *info, uint8_t r, uint8_
 static inline uint32_t
 getPixelRGB(void const *buf_v_start, struct fb_var_screeninfo const *info, int x, int y)
 {
-	int const		line_size = info->xres * info->bits_per_pixel / 8;
+	int const		line_size = info->xres_virtual * info->bits_per_pixel / 8;
 	void const *		buf_v     = (char const *)(buf_v_start) + line_size*y + x*info->bits_per_pixel/8;
 
 #define GET(TYPE)				\
@@ -218,6 +218,8 @@ displayPalette(struct fb_var_screeninfo const *info, void *buf_v)
 
 		for (x=0; x<xres; ++x)
 			ptr = setPixelPalette(ptr, x<xres/2 ? lcol : rcol, bpp);
+
+		ptr += (info->xres_virtual - xres) * (bpp/8);
 	}
 
 #define P(X,Y,COL)							\
@@ -344,6 +346,9 @@ displayRGB(struct fb_var_screeninfo const *info, void *buf_v)
 			ptr    = setPixelRGB(ptr, info,  col, col, col);
 		}
 
+		ptr += ((info->xres_virtual - info->xres) *
+			(info->bits_per_pixel / 8));
+
 		if (old_pos!=cur_pos) {
 			printf("displayRGB -> ptr=%p, r=%u, g=%u, b=%u, grey=%u, pos=[%u,%u,%u,%u]/%u, *addr=[%08x,%08x]\n",
 			       ptr, r,  g,  b, grey,
@@ -403,10 +408,10 @@ static int fb_init(char const *fbdev, struct fbinfo *info)
 	}
 
 	{
-		int const	line_size   = (info->var.xres *
+		int const	line_size   = (info->var.xres_virtual *
 					       info->var.bits_per_pixel) / 8;
 
-		info->buf_size = line_size * info->var.yres;
+		info->buf_size = line_size * info->var.yres_virtual;
 		info->buf      = mmap(0, info->buf_size,
 				      PROT_READ | PROT_WRITE, MAP_SHARED,
 				      info->fd, 0);
@@ -469,8 +474,9 @@ static int grab_fb(char const *fbdev, char const *fname)
 	if (fb_init(fbdev, &fb)<0)
 		goto err;
 
-	fprintf(stderr, "Grabbing from a fb-display with %ux%u (%ibpp)\n",
-		fb.var.xres, fb.var.yres, fb.var.bits_per_pixel);
+	fprintf(stderr, "Grabbing from a fb-display with %ux%u (%ibpp) [virtual %ux%u]\n",
+		fb.var.xres, fb.var.yres, fb.var.bits_per_pixel,
+		fb.var.xres_virtual, fb.var.yres_virtual);
 
 
 	switch (fb.var.bits_per_pixel) {
@@ -528,14 +534,14 @@ static int solid_fb(char const *fbdev, char const *opt)
 		fprintf(stderr, "Filling fb-display with %ux%u (%ibpp) with solid color of %d[%s]\n",
 			fb.var.xres, fb.var.yres, fb.var.bits_per_pixel, val, opt);
 
-		memset(fb.buf, val, fb.var.xres*fb.var.yres);
+		memset(fb.buf, val, fb.var.xres_virtual*fb.var.yres_virtual);
 		break;
 	}
 
 	case 16	:
 	case 24:
 	case 32	: {
-		size_t		i   = fb.var.xres*fb.var.yres;
+		size_t		i   = fb.var.xres_virtual*fb.var.yres_virtual;
 		uint32_t	val = strtol(opt, 0, 0);
 		void		*buf = fb.buf;
 
@@ -559,8 +565,9 @@ static int bars_fb(char const *fbdev)
 	if (fb_init(fbdev, &fb)<0)
 		return -1;
 
-	fprintf(stderr, "Assuming a fb-display with %ux%u (%ibpp)\n",
-		fb.var.xres, fb.var.yres, fb.var.bits_per_pixel);
+	fprintf(stderr, "Assuming a fb-display with %ux%u (%ibpp) [virtal %ux%u]\n",
+		fb.var.xres, fb.var.yres, fb.var.bits_per_pixel,
+		fb.var.xres_virtual, fb.var.yres_virtual);
 
 	switch (fb.var.bits_per_pixel) {
 	case 8	:
