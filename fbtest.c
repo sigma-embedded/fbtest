@@ -485,7 +485,7 @@ static int grab_fb(char const *fbdev, char const *fname)
 		break;
 
 	default:
-		res_buf = alloca(fb.var.yres * fb.var.xres * 3);
+		res_buf = malloc(fb.var.yres * fb.var.xres * 3);
 		res_ptr = res_buf;
 
 		dprintf(out_fd, "P6\n%u %u\n255\n", fb.var.xres, fb.var.yres);
@@ -502,6 +502,7 @@ static int grab_fb(char const *fbdev, char const *fname)
 		}
 
 		write_all(out_fd, res_buf, res_ptr - res_buf);
+		free(res_buf);
 		break;
 	}
 
