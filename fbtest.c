@@ -684,7 +684,8 @@ int main (int argc, char *argv[])
 	while (1) {
 		int		c = getopt_long(argc, argv, "",
 						CMDLINE_OPTIONS, 0);
-		if (c==-1) break;
+		if (c==-1)
+			break;
 
 		switch (c) {
 		case CMD_HELP:		show_help();
