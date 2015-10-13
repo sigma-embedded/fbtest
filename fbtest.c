@@ -20,6 +20,7 @@
 #include <sys/mman.h>
 #include <unistd.h>
 #include <stdint.h>
+#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -40,6 +41,9 @@
 #define CMD_SOLID	0x1003
 #define CMD_GRAB	0x1004
 #define CMD_BARS	0x1005
+#define CMD_SETPIX	0x1008
+#define CMD_X		0x1009
+#define CMD_Y		0x100a
 
 #define CROSS_SZ	50
 
@@ -50,6 +54,9 @@ CMDLINE_OPTIONS[] = {
 	{ "fb",         required_argument, 0, CMD_FB },
 	{ "solid",	required_argument, 0, CMD_SOLID },
 	{ "grab",	required_argument, 0, CMD_GRAB },
+	{ "setpix",	required_argument, 0, CMD_SETPIX },
+	{ "x",		required_argument, 0, CMD_X },
+	{ "y",		required_argument, 0, CMD_Y },
 	{ "bars",	no_argument,       0, CMD_BARS },
 	{ 0,0,0,0 }
 };
@@ -175,6 +182,11 @@ setPixelRGBRaw(void *buf_v, struct fb_var_screeninfo const *info, uint32_t val)
 #undef SET
 }
 
+static ptrdiff_t get_pix_ofs(unsigned int x, unsigned int y,
+			     struct fb_var_screeninfo const *info)
+{
+	return ((y * info->xres_virtual) + x) * info->bits_per_pixel / 8;
+}
 
 static inline void *
 setPixelRGB(void *buf_v, struct fb_var_screeninfo const *info, uint8_t r, uint8_t g, uint8_t b)
@@ -625,10 +637,39 @@ static int bars_fb(char const *fbdev)
 	return 0;
 }
 
+static int set_pix(char const *fbdev, unsigned int x, unsigned int y,
+		    char const *opt)
+{
+	struct fbinfo	fb;
+	unsigned int	col;
+	void		*ptr;
+
+	if (fb_init(fbdev, &fb)<0)
+		return -1;
+
+	col = init_color(&fb, opt);
+
+	ptr = fb.buf + get_pix_ofs(x, y, &fb.var);
+
+	switch (fb.var.bits_per_pixel) {
+	case 8:
+		setPixelPalette(ptr, col, 8);
+		break;
+
+	default:
+		setPixelRGBRaw(ptr, &fb.var, col);
+		break;
+	}
+
+	return 0;
+}
+
 int main (int argc, char *argv[])
 {
 	struct {
 		char const	*fb;
+		unsigned int	x;
+		unsigned int	y;
 	}	options = {
 		.fb = "/dev/fb0",
 	};
@@ -654,6 +695,16 @@ int main (int argc, char *argv[])
 		case CMD_BARS:
 			done = 1;
 			bars_fb(options.fb);
+			break;
+		case CMD_X:
+			options.x = atoi(optarg);
+			break;
+		case CMD_Y:
+			options.y = atoi(optarg);
+			break;
+		case CMD_SETPIX:
+			done = 1;
+			set_pix(options.fb, options.x, options.y, optarg);
 			break;
 		default:
 			fprintf(stderr, "invalid option; try '--help' for more information\n");
