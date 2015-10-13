@@ -591,7 +591,9 @@ static int bars_fb(char const *fbdev)
 		initPalette(fb.fd, NULL, &fb.var);
 		displayPalette(&fb.var, fb.buf);
 		break;
-	default	:	displayRGB(&fb.var, fb.buf);     break;
+	default	:
+		displayRGB(&fb.var, fb.buf);
+		break;
 	}
 
 	fb_free(&fb);
@@ -613,12 +615,21 @@ int main (int argc, char *argv[])
 		if (c==-1) break;
 
 		switch (c) {
-		case CMD_HELP		:  show_help();
-		case CMD_VERSION	:  show_version();
-		case CMD_FB		:  options.fb = optarg; break;
-		case CMD_GRAB		:  done = 1; grab_fb(options.fb, optarg); break;
-		case CMD_SOLID		:  done = 1; solid_fb(options.fb, optarg); break;
-		case CMD_BARS		:  done = 1; bars_fb(options.fb); break;
+		case CMD_HELP:		show_help();
+		case CMD_VERSION:	show_version();
+		case CMD_FB:		options.fb = optarg; break;
+		case CMD_GRAB:
+			done = 1;
+			grab_fb(options.fb, optarg);
+			break;
+		case CMD_SOLID:
+			done = 1;
+			solid_fb(options.fb, optarg);
+			break;
+		case CMD_BARS:
+			done = 1;
+			bars_fb(options.fb);
+			break;
 		default:
 			fprintf(stderr, "invalid option; try '--help' for more information\n");
 			return EXIT_FAILURE;
@@ -628,7 +639,3 @@ int main (int argc, char *argv[])
 	if (!done)
 		bars_fb(options.fb);
 }
-
-// Local Variables:
-// compile-command: "make fbtest CC='arm-xscale-linux-gnu-diet -Os arm-xscale-linux-gnu-gcc' CFLAGS='-Wall -W -std=c99'"
-// End:
