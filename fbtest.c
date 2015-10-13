@@ -41,6 +41,8 @@
 #define CMD_SOLID	0x1003
 #define CMD_GRAB	0x1004
 #define CMD_BARS	0x1005
+#define CMD_TEST_XRES	0x1006
+#define CMD_TEST_YRES	0x1007
 #define CMD_SETPIX	0x1008
 #define CMD_X		0x1009
 #define CMD_Y		0x100a
@@ -54,6 +56,10 @@ CMDLINE_OPTIONS[] = {
 	{ "fb",         required_argument, 0, CMD_FB },
 	{ "solid",	required_argument, 0, CMD_SOLID },
 	{ "grab",	required_argument, 0, CMD_GRAB },
+#if 0
+	{ "test-xres",	required_argument, 0, CMD_TEST_XRES },
+	{ "test-yres",	required_argument, 0, CMD_TEST_YRES },
+#endif
 	{ "setpix",	required_argument, 0, CMD_SETPIX },
 	{ "x",		required_argument, 0, CMD_X },
 	{ "y",		required_argument, 0, CMD_Y },
@@ -696,6 +702,16 @@ int main (int argc, char *argv[])
 			done = 1;
 			bars_fb(options.fb);
 			break;
+#if 0
+		case CMD_TEST_XRES:
+			done = 1;
+			test_xres(options.fb, optarg);
+			break;
+		case CMD_TEST_YRES:
+			done = 1;
+			test_yres(options.fb, optarg);
+			break;
+#endif
 		case CMD_X:
 			options.x = atoi(optarg);
 			break;
