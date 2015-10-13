@@ -530,28 +530,54 @@ err:
 	return rc;
 }
 
+static unsigned int init_color(struct fbinfo *fb, char const *opt)
+{
+	unsigned int	res;
+
+	switch (fb->var.bits_per_pixel) {
+	case 8:
+		initPalette(fb->fd, opt, &fb->var);
+
+		if (opt[0]=='#')
+			res = atoi(opt+1);
+		else if (opt[0]=='g')
+			res = atoi(opt+1)+200;
+		else if (opt[0]=='p')
+			res = 211;
+		else
+			res = atoi(opt)+100;
+
+		break;
+
+	case 16	:
+	case 24:
+	case 32	:
+		res = strtoul(opt, NULL, 0);
+		break;
+
+	default:
+		abort();
+	}
+
+	return res;
+}
+
 static int solid_fb(char const *fbdev, char const *opt)
 {
 	struct fbinfo		fb;
+	unsigned int		col;
 
 	if (fb_init(fbdev, &fb)<0)
 		return -1;
 
+	col = init_color(&fb, opt);
+
 	switch (fb.var.bits_per_pixel) {
 	case 8	: {
-		uint8_t	val;
-
-		initPalette(fb.fd, opt, &fb.var);
-
-		if      (opt[0]=='#') val = atoi(opt+1);
-		else if (opt[0]=='g') val = atoi(opt+1)+200;
-		else if (opt[0]=='p') val = 211;
-		else                  val = atoi(opt)+100;
-
 		fprintf(stderr, "Filling fb-display with %ux%u (%ibpp) with solid color of %d[%s]\n",
-			fb.var.xres, fb.var.yres, fb.var.bits_per_pixel, val, opt);
+			fb.var.xres, fb.var.yres, fb.var.bits_per_pixel, col, opt);
 
-		memset(fb.buf, val, fb.var.xres_virtual*fb.var.yres_virtual);
+		memset(fb.buf, col, fb.var.xres_virtual*fb.var.yres_virtual);
 		break;
 	}
 
@@ -559,14 +585,13 @@ static int solid_fb(char const *fbdev, char const *opt)
 	case 24:
 	case 32	: {
 		size_t		i   = fb.var.xres_virtual*fb.var.yres_virtual;
-		uint32_t	val = strtol(opt, 0, 0);
 		void		*buf = fb.buf;
 
 		fprintf(stderr, "Filling fb-display with %ux%u (%ibpp) with solid color of %08x\n",
-			fb.var.xres, fb.var.yres, fb.var.bits_per_pixel, val);
+			fb.var.xres, fb.var.yres, fb.var.bits_per_pixel, col);
 
 		while (i-->0)
-			buf = setPixelRGBRaw(buf, &fb.var, val);
+			buf = setPixelRGBRaw(buf, &fb.var, col);
 		break;
 	}
 	}
