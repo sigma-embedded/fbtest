@@ -360,6 +360,8 @@ displayRGB(struct fb_var_screeninfo const *info, void *buf_v)
 			if (y >= yres/2 - CROSS_SZ && y < yres/2 + CROSS_SZ &&
 			    x >= xres/2 - CROSS_SZ && x < xres/2 + CROSS_SZ)
 				ptr = draw_cross_rgb(ptr, info, xres/2 - x, yres/2 - y);
+			else if (y < 4 && x == 4-y)
+				ptr = setPixelRGB(ptr, info, 255, 255, 255);
 			else if (x<xres/2) ptr = setPixelRGB(ptr, info, r, g, b);
 			else if (grey>min_len) ptr = setPixelRGB(ptr, info, 255, 255, 255);
 			else          ptr = setPixelRGB(ptr, info,
