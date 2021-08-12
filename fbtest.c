@@ -67,6 +67,12 @@ CMDLINE_OPTIONS[] = {
 	{ 0,0,0,0 }
 };
 
+struct rgb_pix {
+	uint8_t		r;
+	uint8_t		g;
+	uint8_t		b;
+	uint8_t		_a;
+};
 
 static void show_help()
 {
@@ -80,6 +86,15 @@ static void show_version()
 	exit(1);
 }
 
+static uint32_t ror32_8(uint32_t v)
+{
+	return ((v & 0xffu) << 24) | (v >> 8);
+}
+
+static uint32_t ror32_1(uint32_t v)
+{
+	return ((v & 0x1u) << 30) | (v >> 1);
+}
 
 static void initPalette(int fd, char const *pin_str, struct fb_var_screeninfo const *info)
 {
@@ -199,6 +214,19 @@ setPixelRGB(void *buf_v, struct fb_var_screeninfo const *info, uint8_t r, uint8_
 {
 #define S(VAR,FIELD)	(((VAR)==0 ? 0 :				\
 			  (VAR)<=info->FIELD.length ? (1<<((VAR)-1)) : ((1<<(info->FIELD.length)) - 1)) << (info->FIELD.offset))
+
+	uint32_t	val = S(r, red) | S(g, green) | S(b, blue);
+#undef S
+
+	return setPixelRGBRaw(buf_v, info, val);
+}
+
+static inline void *
+setPixelRGBCol(void *buf_v, struct fb_var_screeninfo const *info, uint8_t r, uint8_t g, uint8_t b)
+{
+#define S(VAR,FIELD)							\
+	((VAR)==0 ? 0 :							\
+	 (((VAR)>=(1u << info->FIELD.length) ? ((1u << info->FIELD.length) - 1u) : (VAR)) << (info->FIELD.offset)))
 
 	uint32_t	val = S(r, red) | S(g, green) | S(b, blue);
 #undef S
