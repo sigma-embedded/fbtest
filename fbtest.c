@@ -46,6 +46,8 @@
 #define CMD_SETPIX	0x1008
 #define CMD_X		'x'
 #define CMD_Y		'y'
+#define CMD_CROSS	0x100b
+#define CMD_DSHADE	0x100c
 
 #define CROSS_SZ	50
 
@@ -64,6 +66,8 @@ CMDLINE_OPTIONS[] = {
 	{ "x",		required_argument, 0, CMD_X },
 	{ "y",		required_argument, 0, CMD_Y },
 	{ "bars",	no_argument,       0, CMD_BARS },
+	{ "cross",	no_argument,       0, CMD_CROSS },
+	{ "dshade",	no_argument,       0, CMD_DSHADE },
 	{ 0,0,0,0 }
 };
 
@@ -614,6 +618,146 @@ static unsigned int init_color(struct fbinfo *fb, char const *opt)
 	return res;
 }
 
+static void dshade_next_color(struct rgb_pix *col,
+			      struct fb_var_screeninfo const *info)
+{
+	uint8_t		*this_c;
+	uint8_t		*next_c;
+	uint8_t		max;
+
+	if (col->r != 0 || (col->g == 0 && col->b == 0)) {
+		this_c = &col->r;
+		next_c = &col->g;
+		max    = (1u << info->red.length) - 1;
+	} else if (col->g != 0) {
+		this_c = &col->g;
+		next_c = &col->b;
+		max    = (1u << info->green.length) - 1;
+	} else if (col->b != 0) {
+		this_c = &col->b;
+		next_c = &col->r;
+		max    = (1u << info->blue.length) - 1;
+	} else {
+		abort();
+	}
+
+	if (*this_c == max) {
+		*this_c = 0;
+		*next_c = 1;
+	} else {
+		*this_c += 1;
+	}
+}
+
+static int dshade(char const *fbdev)
+{
+	struct fbinfo		fb;
+
+	if (fb_init(fbdev, &fb)<0)
+		return -1;
+
+	fprintf(stderr, "Assuming a fb-display with %ux%u (%ibpp) [virtal %ux%u]\n",
+		fb.var.xres, fb.var.yres, fb.var.bits_per_pixel,
+		fb.var.xres_virtual, fb.var.yres_virtual);
+
+	switch (fb.var.bits_per_pixel) {
+	case 8	: {
+		/* TODO: implement me! */
+		abort();
+		break;
+	}
+
+	case 16:
+	case 24:
+	case 32: {
+		struct rgb_pix	col = { 0,0,0,0 };
+
+		for (unsigned int x = 0; x < fb.var.xres; ++x) {
+			void		*ptr;
+			struct rgb_pix	cur_col = col;
+
+			ptr = fb.buf + get_pix_ofs(x, 0, &fb.var);
+
+			for (unsigned int y = 0; y < fb.var.yres; ++y) {
+				setPixelRGBCol(ptr, &fb.var, col.r, col.g, col.b);
+				dshade_next_color(&col, &fb.var);
+
+				ptr += fb.stride;
+			}
+
+			col = cur_col;
+			dshade_next_color(&col, &fb.var);
+		}
+		break;
+	}
+
+
+	default:
+		abort();
+	}
+
+	return 0;
+}
+
+static int cross(char const *fbdev)
+{
+	struct fbinfo		fb;
+
+	if (fb_init(fbdev, &fb)<0)
+		return -1;
+
+	fprintf(stderr, "Assuming a fb-display with %ux%u (%ibpp) [virtal %ux%u]\n",
+		fb.var.xres, fb.var.yres, fb.var.bits_per_pixel,
+		fb.var.xres_virtual, fb.var.yres_virtual);
+
+	switch (fb.var.bits_per_pixel) {
+	case 8	: {
+		/* TODO: implement me! */
+		abort();
+		break;
+	}
+
+	case 16:
+	case 24:
+	case 32: {
+		unsigned int	y = 0;
+		int		dir = 1;
+		uint32_t	col0 = 0xff00ffff;
+		uint32_t	col1 = 0xfff00fff;
+
+		for (unsigned int x = 0; x < fb.var.xres; ++x) {
+			void		*ptr;
+
+			ptr = fb.buf + get_pix_ofs(x, y, &fb.var);
+			setPixelRGBRaw(ptr, &fb.var,
+				       x % 2 ? col0 : ror32_1(col0));
+
+			ptr = fb.buf + get_pix_ofs(x, fb.var.yres - y - 1, &fb.var);
+			setPixelRGBRaw(ptr, &fb.var,
+				       x % 2 ? col1 : ror32_1(col1));
+
+			if (dir > 0 && y + dir >= fb.var.yres) {
+				dir = -1;
+				col1 = ror32_8(col1);
+				printf("x=%u, y=%u -> col1=%08x\n", x, y, col1);
+			} else if (dir < 0 && y < (unsigned int)(-dir)) {
+				dir = +1;
+				col0 = ror32_8(col0);
+				printf("x=%u, y=%u -> col0=%08x\n", x, y, col0);
+			}
+
+			y += dir;
+		}
+		break;
+	}
+
+	default:
+		abort();
+	}
+
+	return 0;
+}
+
 static int solid_fb(char const *fbdev, char const *opt)
 {
 	struct fbinfo		fb;
@@ -736,6 +880,14 @@ int main (int argc, char *argv[])
 		case CMD_BARS:
 			done = 1;
 			bars_fb(options.fb);
+			break;
+		case CMD_CROSS:
+			done = 1;
+			cross(options.fb);
+			break;
+		case CMD_DSHADE:
+			done = 1;
+			dshade(options.fb);
 			break;
 #if 0
 		case CMD_TEST_XRES:
