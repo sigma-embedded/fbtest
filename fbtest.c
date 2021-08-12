@@ -81,7 +81,9 @@ struct rgb_pix {
 __attribute__((__noreturn__))
 static void show_help()
 {
-	printf("Usage: fbtest [--fb <dev>] [--solid <color>] [--grab <fname>] [--bars]\n");
+	printf("Usage: fbtest [--fb <dev>] [--solid <color>] [--grab <fname>]\n"
+	       "       [--bars] [--cross] [--dshade]\n"
+	       "       [-x <x> -y <y> -setpix <col>]*\n");
 	exit(0);
 }
 
