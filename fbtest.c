@@ -448,6 +448,7 @@ struct fbinfo {
 	int				fd;
 	void				*buf;
 	size_t				buf_size;
+	size_t				stride;
 };
 
 struct window {
@@ -477,6 +478,7 @@ static int fb_init(char const *fbdev, struct fbinfo *info)
 		int const	line_size   = (info->var.xres_virtual *
 					       info->var.bits_per_pixel) / 8;
 
+		info->stride   = line_size;
 		info->buf_size = line_size * info->var.yres_virtual;
 		info->buf      = mmap(0, info->buf_size,
 				      PROT_READ | PROT_WRITE, MAP_SHARED,
