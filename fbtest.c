@@ -74,12 +74,14 @@ struct rgb_pix {
 	uint8_t		_a;
 };
 
+__attribute__((__noreturn__))
 static void show_help()
 {
 	printf("Usage: fbtest [--fb <dev>] [--solid <color>] [--grab <fname>] [--bars]\n");
 	exit(0);
 }
 
+__attribute__((__noreturn__))
 static void show_version()
 {
 	printf("fbtest 0.1 -- framebuffer test utility\n");
