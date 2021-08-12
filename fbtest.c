@@ -44,8 +44,8 @@
 #define CMD_TEST_XRES	0x1006
 #define CMD_TEST_YRES	0x1007
 #define CMD_SETPIX	0x1008
-#define CMD_X		0x1009
-#define CMD_Y		0x100a
+#define CMD_X		'x'
+#define CMD_Y		'y'
 
 #define CROSS_SZ	50
 
